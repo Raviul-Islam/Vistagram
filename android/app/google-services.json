@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "535267910277",
+    "project_id": "vistagram-a4266",
+    "storage_bucket": "vistagram-a4266.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:535267910277:android:e71d7915166186ad33bfec",
+        "android_client_info": {
+          "package_name": "com.vistagram.vistagram"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAsYPbzrJpysAoBgmWOxpKoiKvx2zF9a2o"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
