@@ -18,6 +18,13 @@ subprojects {
         extensions.findByType(LibraryExtension::class.java)?.apply {
             compileSdk = 36
         }
+
+        if (extensions.findByType(ApplicationExtension::class.java) != null || extensions.findByType(LibraryExtension::class.java) != null) {
+            dependencies {
+                add("implementation", "androidx.concurrent:concurrent-futures:1.2.0")
+                add("compileOnly", "androidx.concurrent:concurrent-futures:1.2.0")
+            }
+        }
     }
 }
 

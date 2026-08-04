@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../post/data/post_service.dart';
+import '../../../story/presentation/widgets/stories_bar.dart';
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -26,36 +27,7 @@ class HomePage extends ConsumerWidget {
       ),
       body: CustomScrollView(
         slivers: [
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 100,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: 10,
-                itemBuilder: (context, index) {
-                  return Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Column(
-                      children: [
-                        CircleAvatar(
-                          radius: 30,
-                          backgroundColor: Colors.grey[800],
-                          backgroundImage: NetworkImage(
-                            'https://picsum.photos/seed/user$index/100/100',
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'User $index',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
+          const SliverToBoxAdapter(child: StoriesBar()),
           const SliverToBoxAdapter(child: Divider(height: 1)),
           feedAsync.when(
             data: (posts) {
@@ -69,6 +41,7 @@ class HomePage extends ConsumerWidget {
               return SliverList(
                 delegate: SliverChildBuilderDelegate((context, index) {
                   final post = posts[index];
+                  final displayUser = post.userId.length >= 6 ? 'user_${post.userId.substring(0, 6)}' : 'user_${post.userId}';
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -78,8 +51,8 @@ class HomePage extends ConsumerWidget {
                           child: const Icon(Icons.person, color: Colors.white),
                         ),
                         title: Text(
-                          post.userId.substring(0, 5),
-                        ), // Simulated username
+                          displayUser,
+                        ),
                         trailing: const Icon(Icons.more_vert),
                       ),
                       CachedNetworkImage(
@@ -133,7 +106,7 @@ class HomePage extends ConsumerWidget {
                             style: const TextStyle(color: Colors.white),
                             children: [
                               TextSpan(
-                                text: '${post.userId.substring(0, 5)} ',
+                                text: '$displayUser ',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                 ),

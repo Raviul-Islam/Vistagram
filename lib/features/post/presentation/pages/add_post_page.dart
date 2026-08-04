@@ -7,7 +7,8 @@ import '../../data/post_service.dart';
 import '../../../auth/data/auth_service.dart';
 
 class AddPostPage extends ConsumerStatefulWidget {
-  const AddPostPage({super.key});
+  final String? initialImagePath;
+  const AddPostPage({super.key, this.initialImagePath});
 
   @override
   ConsumerState<AddPostPage> createState() => _AddPostPageState();
@@ -17,6 +18,24 @@ class _AddPostPageState extends ConsumerState<AddPostPage> {
   File? _selectedImage;
   final TextEditingController _captionController = TextEditingController();
   bool _isUploading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialImagePath != null) {
+      _selectedImage = File(widget.initialImagePath!);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant AddPostPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialImagePath != oldWidget.initialImagePath && widget.initialImagePath != null) {
+      setState(() {
+        _selectedImage = File(widget.initialImagePath!);
+      });
+    }
+  }
 
   Future<void> _pickImage(ImageSource source) async {
     final picker = ImagePicker();
@@ -84,10 +103,13 @@ class _AddPostPageState extends ConsumerState<AddPostPage> {
         _captionController.clear();
       });
       
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Post shared successfully!')));
       context.go('/');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload post: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload post: $e')));
+      }
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
@@ -125,7 +147,7 @@ class _AddPostPageState extends ConsumerState<AddPostPage> {
               child: Text(
                 'Share',
                 style: TextStyle(
-                  color: _selectedImage == null ? Colors.blue.withOpacity(0.5) : Colors.blue,
+                  color: _selectedImage == null ? Colors.blue.withValues(alpha: 0.5) : Colors.blue,
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
                 ),

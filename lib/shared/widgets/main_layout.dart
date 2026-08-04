@@ -1,15 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../features/post/presentation/pages/instant_camera_page.dart';
 
-class MainLayout extends StatefulWidget {
+class MainLayout extends ConsumerStatefulWidget {
   final Widget child;
   const MainLayout({super.key, required this.child});
 
   @override
-  State<MainLayout> createState() => _MainLayoutState();
+  ConsumerState<MainLayout> createState() => _MainLayoutState();
 }
 
-class _MainLayoutState extends State<MainLayout> {
+class _MainLayoutState extends ConsumerState<MainLayout> {
+  void _onAddPostTapped(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const InstantCameraPage()),
+    );
+  }
+
   int _calculateSelectedIndex(BuildContext context) {
     final String location = GoRouterState.of(context).uri.path;
     if (location.startsWith('/explore')) return 1;
@@ -36,7 +44,7 @@ class _MainLayoutState extends State<MainLayout> {
               context.go('/explore');
               break;
             case 2:
-              context.go('/post');
+              _onAddPostTapped(context);
               break;
             case 3:
               context.go('/reels');

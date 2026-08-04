@@ -31,23 +31,41 @@ void main() async {
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _shellNavigatorKey = GlobalKey<NavigatorState>();
 
+class RouterNotifier extends ChangeNotifier {
+  final Ref ref;
+
+  RouterNotifier(this.ref) {
+    ref.listen(authStateProvider, (previous, next) {
+      notifyListeners();
+    });
+  }
+
+  String? redirect(BuildContext context, GoRouterState state) {
+    final authState = ref.read(authStateProvider);
+    if (authState.isLoading) return null;
+
+    final isAuthenticated = authState.value != null;
+    final isLoggingIn = state.uri.path == '/login' || state.uri.path == '/signup';
+      
+    if (!isAuthenticated && !isLoggingIn) return '/login';
+    if (isAuthenticated && isLoggingIn) return '/';
+      
+    return null;
+  }
+}
+
+final routerNotifierProvider = Provider<RouterNotifier>((ref) {
+  return RouterNotifier(ref);
+});
+
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authStateProvider);
+  final notifier = ref.watch(routerNotifierProvider);
 
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/',
-    redirect: (context, state) {
-      if (authState.isLoading) return null;
-
-      final isAuthenticated = authState.value != null;
-      final isLoggingIn = state.uri.path == '/login' || state.uri.path == '/signup';
-      
-      if (!isAuthenticated && !isLoggingIn) return '/login';
-      if (isAuthenticated && isLoggingIn) return '/';
-      
-      return null;
-    },
+    refreshListenable: notifier,
+    redirect: notifier.redirect,
     routes: [
       GoRoute(
         path: '/login',
@@ -73,7 +91,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/post',
-            builder: (context, state) => const AddPostPage(),
+            builder: (context, state) {
+              final imagePath = state.extra as String?;
+              return AddPostPage(initialImagePath: imagePath);
+            },
           ),
           GoRoute(
             path: '/reels',
