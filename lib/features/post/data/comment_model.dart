@@ -1,24 +1,27 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class Story {
+class Comment {
   final String id;
+  final String postId;
   final String userId;
-  final String imageUrl;
+  final String text;
   final DateTime createdAt;
 
-  Story({
+  Comment({
     required this.id,
+    required this.postId,
     required this.userId,
-    required this.imageUrl,
+    required this.text,
     required this.createdAt,
   });
 
-  factory Story.fromFirestore(DocumentSnapshot doc) {
+  factory Comment.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    return Story(
+    return Comment(
       id: doc.id,
-      userId: data['userId'] ?? 'user',
-      imageUrl: data['imageUrl'] ?? '',
+      postId: data['postId'] ?? '',
+      userId: data['userId'] ?? '',
+      text: data['text'] ?? '',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }

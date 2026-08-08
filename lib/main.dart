@@ -11,7 +11,12 @@ import 'features/reels/presentation/pages/reels_page.dart';
 import 'features/profile/presentation/pages/profile_page.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 import 'features/auth/presentation/pages/signup_page.dart';
+import 'features/profile/presentation/pages/edit_profile_page.dart';
 import 'features/auth/data/auth_service.dart';
+import 'features/splash/presentation/pages/splash_page.dart';
+import 'features/chat/presentation/pages/inbox_page.dart';
+import 'features/chat/presentation/pages/new_chat_page.dart';
+import 'features/chat/presentation/pages/chat_page.dart';
 import 'shared/widgets/main_layout.dart';
 
 void main() async {
@@ -41,6 +46,10 @@ class RouterNotifier extends ChangeNotifier {
   }
 
   String? redirect(BuildContext context, GoRouterState state) {
+    if (state.uri.path == '/splash') {
+      return null;
+    }
+
     final authState = ref.read(authStateProvider);
     if (authState.isLoading) return null;
 
@@ -63,10 +72,14 @@ final routerProvider = Provider<GoRouter>((ref) {
 
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
-    initialLocation: '/',
+    initialLocation: '/splash',
     refreshListenable: notifier,
     redirect: notifier.redirect,
     routes: [
+      GoRoute(
+        path: '/splash',
+        builder: (context, state) => const SplashPage(),
+      ),
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginPage(),
@@ -74,6 +87,28 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/signup',
         builder: (context, state) => const SignUpPage(),
+      ),
+      GoRoute(
+        path: '/inbox',
+        builder: (context, state) => const InboxPage(),
+        routes: [
+          GoRoute(
+            path: 'new',
+            builder: (context, state) => const NewChatPage(),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/chat/:chatId',
+        builder: (context, state) {
+          final chatId = state.pathParameters['chatId']!;
+          final chatTitle = state.extra as String? ?? 'Chat';
+          return ChatPage(chatId: chatId, chatTitle: chatTitle);
+        },
+      ),
+      GoRoute(
+        path: '/edit_profile',
+        builder: (context, state) => const EditProfilePage(),
       ),
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
@@ -103,6 +138,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/profile',
             builder: (context, state) => const ProfilePage(),
+          ),
+          GoRoute(
+            path: '/profile/:id',
+            builder: (context, state) {
+              final id = state.pathParameters['id'];
+              return ProfilePage(userId: id);
+            },
           ),
         ],
       ),

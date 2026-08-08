@@ -1,34 +1,31 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class Post {
+class Reel {
   final String id;
   final String userId;
-  final String imageUrl;
+  final String videoUrl;
   final String caption;
   final DateTime createdAt;
   final List<String> likes;
-  final int commentCount;
 
-  Post({
+  Reel({
     required this.id,
     required this.userId,
-    required this.imageUrl,
+    required this.videoUrl,
     required this.caption,
     required this.createdAt,
     required this.likes,
-    required this.commentCount,
   });
 
-  factory Post.fromFirestore(DocumentSnapshot doc) {
+  factory Reel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    return Post(
+    return Reel(
       id: doc.id,
       userId: data['userId'] ?? '',
-      imageUrl: data['imageUrl'] ?? '',
+      videoUrl: data['videoUrl'] ?? '',
       caption: data['caption'] ?? '',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       likes: List<String>.from(data['likes'] ?? []),
-      commentCount: data['commentCount'] ?? 0,
     );
   }
 }

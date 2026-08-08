@@ -1,10 +1,14 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../data/post_service.dart';
+import '../../../reels/data/reel_service.dart';
 import '../../../auth/data/auth_service.dart';
+
+enum CameraMode { post, reel }
 
 class InstantCameraPage extends ConsumerStatefulWidget {
   const InstantCameraPage({super.key});
@@ -19,6 +23,11 @@ class _InstantCameraPageState extends ConsumerState<InstantCameraPage> {
   int _selectedCameraIndex = 0;
   bool _isInitializing = true;
   String? _errorMessage;
+  
+  CameraMode _currentMode = CameraMode.post;
+  bool _isRecording = false;
+  int _recordingSeconds = 0;
+  Timer? _recordingTimer;
 
   @override
   void initState() {
@@ -54,7 +63,7 @@ class _InstantCameraPageState extends ConsumerState<InstantCameraPage> {
     final controller = CameraController(
       camera,
       ResolutionPreset.high,
-      enableAudio: false,
+      enableAudio: _currentMode == CameraMode.reel, // Enable audio for reels
     );
 
     _controller = controller;
@@ -76,7 +85,7 @@ class _InstantCameraPageState extends ConsumerState<InstantCameraPage> {
   }
 
   Future<void> _switchCamera() async {
-    if (_cameras.length <= 1 || _isInitializing) return;
+    if (_cameras.length <= 1 || _isInitializing || _isRecording) return;
     setState(() {
       _isInitializing = true;
       _selectedCameraIndex = (_selectedCameraIndex + 1) % _cameras.length;
@@ -84,73 +93,182 @@ class _InstantCameraPageState extends ConsumerState<InstantCameraPage> {
     await _setupCameraController(_cameras[_selectedCameraIndex]);
   }
 
-  Future<void> _takePicture() async {
-    if (_controller == null || !_controller!.value.isInitialized || _controller!.value.isTakingPicture) {
-      return;
-    }
+  void _switchMode(CameraMode mode) async {
+    if (_isRecording || _currentMode == mode) return;
+    setState(() {
+      _currentMode = mode;
+      _isInitializing = true;
+    });
+    await _setupCameraController(_cameras[_selectedCameraIndex]);
+  }
 
-    try {
-      final XFile picture = await _controller!.takePicture();
-      _handleSelectedImage(File(picture.path));
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to take picture: $e')),
-        );
+  Future<void> _handleCapture() async {
+    if (_controller == null || !_controller!.value.isInitialized) return;
+
+    if (_currentMode == CameraMode.post) {
+      if (_controller!.value.isTakingPicture) return;
+      try {
+        final XFile picture = await _controller!.takePicture();
+        _handleSelectedMedia(File(picture.path), isVideo: false);
+      } catch (e) {
+        _showError('Failed to take picture: $e');
       }
+    } else {
+      // Reel mode
+      if (_isRecording) {
+        await _stopRecording();
+      } else {
+        await _startRecording();
+      }
+    }
+  }
+
+  Future<void> _startRecording() async {
+    if (_controller!.value.isRecordingVideo) return;
+    try {
+      await _controller!.startVideoRecording();
+      setState(() {
+        _isRecording = true;
+        _recordingSeconds = 0;
+      });
+      _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        setState(() {
+          _recordingSeconds++;
+        });
+        if (_recordingSeconds >= 90) { // 90 seconds limit
+          _stopRecording();
+        }
+      });
+    } catch (e) {
+      _showError('Failed to start recording: $e');
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    if (!_controller!.value.isRecordingVideo) return;
+    try {
+      _recordingTimer?.cancel();
+      final XFile video = await _controller!.stopVideoRecording();
+      setState(() {
+        _isRecording = false;
+        _recordingSeconds = 0;
+      });
+      _handleSelectedMedia(File(video.path), isVideo: true);
+    } catch (e) {
+      setState(() {
+        _isRecording = false;
+        _recordingSeconds = 0;
+      });
+      _showError('Failed to stop recording: $e');
     }
   }
 
   Future<void> _pickFromGallery() async {
+    if (_isRecording) return;
     final picker = ImagePicker();
     try {
-      final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-      if (pickedFile != null) {
-        _handleSelectedImage(File(pickedFile.path));
+      if (_currentMode == CameraMode.post) {
+        final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+        if (pickedFile != null) {
+          _handleSelectedMedia(File(pickedFile.path), isVideo: false);
+        }
+      } else {
+        final pickedFile = await picker.pickVideo(source: ImageSource.gallery);
+        if (pickedFile != null) {
+          _handleSelectedMedia(File(pickedFile.path), isVideo: true);
+        }
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to open gallery: $e')),
-        );
-      }
+      _showError('Failed to open gallery: $e');
     }
   }
 
-  void _handleSelectedImage(File imageFile) {
+  void _showError(String message) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  void _handleSelectedMedia(File mediaFile, {required bool isVideo}) {
     final authState = ref.read(authStateProvider);
     final user = authState.value;
 
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You must be logged in to share a photo.')),
-      );
+      _showError('You must be logged in to share.');
       return;
     }
 
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
 
-    navigator.pop();
+    navigator.pop(); // Close camera
     messenger.showSnackBar(
-      const SnackBar(content: Text('Sharing photo...')),
+      SnackBar(content: Text(isVideo ? 'Sharing Reel...' : 'Sharing Post...')),
     );
 
-    ref.read(postServiceProvider).uploadPost(imageFile, '', user.uid).then((_) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Photo shared successfully!')),
-      );
-    }).catchError((error) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Failed to share photo: $error')),
-      );
-    });
+    if (isVideo) {
+      ref.read(reelServiceProvider).uploadReel(mediaFile, '', user.uid).then((_) {
+        messenger.showSnackBar(const SnackBar(content: Text('Reel shared successfully!')));
+      }).catchError((error) {
+        messenger.showSnackBar(SnackBar(content: Text('Failed to share Reel: $error')));
+      });
+    } else {
+      ref.read(postServiceProvider).uploadPost(mediaFile, '', user.uid).then((_) {
+        messenger.showSnackBar(const SnackBar(content: Text('Post shared successfully!')));
+      }).catchError((error) {
+        messenger.showSnackBar(SnackBar(content: Text('Failed to share Post: $error')));
+      });
+    }
   }
 
   @override
   void dispose() {
+    _recordingTimer?.cancel();
     _controller?.dispose();
     super.dispose();
+  }
+
+  Widget _buildModeSelector() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        GestureDetector(
+          onTap: () => _switchMode(CameraMode.post),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: _currentMode == CameraMode.post ? Colors.black54 : Colors.transparent,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              'POST',
+              style: TextStyle(
+                color: _currentMode == CameraMode.post ? Colors.white : Colors.white54,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        GestureDetector(
+          onTap: () => _switchMode(CameraMode.reel),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: _currentMode == CameraMode.reel ? Colors.black54 : Colors.transparent,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              'REEL',
+              style: TextStyle(
+                color: _currentMode == CameraMode.reel ? Colors.white : Colors.white54,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -188,6 +306,7 @@ class _InstantCameraPageState extends ConsumerState<InstantCameraPage> {
                 ),
               ),
 
+            // Top close button
             Positioned(
               top: 16,
               left: 16,
@@ -200,71 +319,101 @@ class _InstantCameraPageState extends ConsumerState<InstantCameraPage> {
               ),
             ),
 
+            // Timer (if recording)
+            if (_isRecording)
+              Positioned(
+                top: 24,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '00:${_recordingSeconds.toString().padLeft(2, '0')}',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ),
+                ),
+              ),
+
+            // Bottom controls
             Positioned(
               bottom: 30,
               left: 0,
               right: 0,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    GestureDetector(
-                      onTap: _pickFromGallery,
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color: Colors.grey[800],
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.white, width: 2),
-                            ),
-                            child: const Icon(Icons.photo_library, color: Colors.white, size: 26),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildModeSelector(),
+                  const SizedBox(height: 20),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        GestureDetector(
+                          onTap: _pickFromGallery,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 50,
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[800],
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Colors.white, width: 2),
+                                ),
+                                child: const Icon(Icons.photo_library, color: Colors.white, size: 26),
+                              ),
+                              const SizedBox(height: 4),
+                              const Text('Gallery', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                            ],
                           ),
-                          const SizedBox(height: 4),
-                          const Text('Gallery', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-                        ],
-                      ),
-                    ),
-
-                    GestureDetector(
-                      onTap: _takePicture,
-                      child: Container(
-                        width: 76,
-                        height: 76,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 4),
                         ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(3.0),
+
+                        GestureDetector(
+                          onTap: _handleCapture,
                           child: Container(
-                            decoration: const BoxDecoration(
+                            width: 76,
+                            height: 76,
+                            decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: Colors.white,
+                              border: Border.all(color: Colors.white, width: 4),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(3.0),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  shape: _currentMode == CameraMode.reel && _isRecording ? BoxShape.rectangle : BoxShape.circle,
+                                  borderRadius: _currentMode == CameraMode.reel && _isRecording ? BorderRadius.circular(8) : null,
+                                  color: _currentMode == CameraMode.reel ? Colors.red : Colors.white,
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
 
-                    if (_cameras.length > 1)
-                      CircleAvatar(
-                        radius: 25,
-                        backgroundColor: Colors.black54,
-                        child: IconButton(
-                          icon: const Icon(Icons.flip_camera_ios, color: Colors.white, size: 24),
-                          onPressed: _switchCamera,
-                        ),
-                      )
-                    else
-                      const SizedBox(width: 50),
-                  ],
-                ),
+                        if (_cameras.length > 1)
+                          CircleAvatar(
+                            radius: 25,
+                            backgroundColor: Colors.black54,
+                            child: IconButton(
+                              icon: const Icon(Icons.flip_camera_ios, color: Colors.white, size: 24),
+                              onPressed: _switchCamera,
+                            ),
+                          )
+                        else
+                          const SizedBox(width: 50),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

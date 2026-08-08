@@ -41,18 +41,16 @@ class StoryService {
   Stream<List<Story>> getStories() {
     return _firestore
         .collection('stories')
-        .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
           final dbStories = snapshot.docs
               .map((doc) => Story.fromFirestore(doc))
               .where((story) => story.imageUrl.isNotEmpty)
               .toList();
-          if (dbStories.isEmpty) {
-            return Story.demoStories;
-          }
+          
+          dbStories.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+          
           return dbStories;
-        })
-        .handleError((_) => Story.demoStories);
+        });
   }
 }

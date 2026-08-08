@@ -34,6 +34,20 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
     }
   }
 
+  void _signUpWithGoogle() async {
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(authServiceProvider).signInWithGoogle();
+      // Navigation handled by go_router redirect
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -71,6 +85,28 @@ class _SignUpPageState extends ConsumerState<SignUpPage> {
                 onPressed: _isLoading ? null : _signUp,
                 style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
                 child: _isLoading ? const CircularProgressIndicator() : const Text('Sign Up'),
+              ),
+              const SizedBox(height: 16),
+              const Row(
+                children: [
+                  Expanded(child: Divider(color: Colors.grey)),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8.0),
+                    child: Text('OR', style: TextStyle(color: Colors.grey)),
+                  ),
+                  Expanded(child: Divider(color: Colors.grey)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: _isLoading ? null : _signUpWithGoogle,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Colors.grey),
+                ),
+                icon: Image.asset('assets/images/google_logo.png', height: 24),
+                label: const Text('Continue with Google', style: TextStyle(fontSize: 16)),
               ),
               const SizedBox(height: 16),
               TextButton(
